@@ -1,0 +1,9 @@
+{
+  "name": "dupe-images",
+  "description": "Node.js package for finding and removing duplicate image files with extreme precision",
+  "main": "index.js",
+  "version": "1.0",
+  "dependencies": {
+	"jimp": "^1.0.0"
+  }
+}
