@@ -4,6 +4,6 @@
   "main": "index.js",
   "version": "1.0",
   "dependencies": {
-	"jimp": "^1.0.0"
+	"jimp": "^0.2.28"
   }
 }

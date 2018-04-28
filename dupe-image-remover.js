@@ -25,10 +25,13 @@ module.exports = function removeDuplicates(directory, options = {}) {
 			logger.red('No duplicates to remove.');
 			return;
 		}
+		
 		var startTime = Date.now();
+		
 		logger.ln();
 		logger.log('Determining duplicates to remove...');
 		logger.indent();
+		
 		return duplicates.forEachAsync((group,idx) => {
 			logger.log(`Group ${idx+1} (${group.length} images)`);
 			logger.indent();
@@ -39,6 +42,7 @@ module.exports = function removeDuplicates(directory, options = {}) {
 			logger.log('Starting As:', bestName, Format.bytes(bestSizeFile._size));
 			return group.slice(1).forEachAsync(file => {
 				logger.log('Comparing:  ', file.name, Format.bytes(file._size));
+				
 				bestName = options.namePreference(file.name, bestName);
 				
 				// use the highest resolution
@@ -46,16 +50,19 @@ module.exports = function removeDuplicates(directory, options = {}) {
 					// no change
 				} else if (file.width > bestSizeFile.width && file.height > bestSizeFile.height) {
 					[bestSizeFile,file] = [file,bestSizeFile];
+					
 				// same image size, use the smaller file size
 				} else if (bestSizeFile._size < file._size) {
 					// no change
 				} else if (file._size < bestSizeFile._size) {
 					[bestSizeFile,file] = [file,bestSizeFile];
+					
 				// same image size and file size, so choose the preferred type
 				} else if (bestSizeFile.ext == options.typePreference) {
 					// no change
 				} else if (file.ext == options.typePreference) {
 					[bestSizeFile,file] = [file,bestSizeFile];
+					
 				// same image size, file size, and type. probably best to do nothing about it.
 				} else {
 					// no change
@@ -84,6 +91,7 @@ module.exports = function removeDuplicates(directory, options = {}) {
 			var endTime = Date.now();
 			var timeElapsed = endTime - startTime;
 			var totalBytes = removed.reduce((a,f) => a += f._size, 0);
+			
 			logger.unindent();
 			logger.ln();
 			logger.log(`Finished in ${Format.time(timeElapsed)}.`);
