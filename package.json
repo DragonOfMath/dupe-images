@@ -2,7 +2,7 @@
   "name": "dupe-images",
   "description": "Node.js package for finding and removing duplicate image files with extreme precision",
   "main": "index.js",
-  "version": "1.0",
+  "version": "1.01",
   "dependencies": {
 	"jimp": "^0.2.28"
   }

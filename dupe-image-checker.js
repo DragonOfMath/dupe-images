@@ -1,8 +1,8 @@
 const Jimp    = require('jimp');
 const readAll = require('./utils/read-all');
-const Array   = require('./utils/array');
+const Array   = require('./utils/Array');
 const Format  = require('./utils/formatting');
-const File    = require('./utils/file');
+const File    = require('./utils/File');
 const Logger  = require('./utils/Logger');
 
 var logger = new Logger('Dupe Checker');
@@ -24,7 +24,7 @@ function distance(h1, h2) {
 module.exports = function findDuplicates(directory, options = {}) {
 	options.threshold = options.threshold === undefined ? 0.1  : options.threshold;
 	options.tolerance = options.tolerance === undefined ? 0.01 : options.tolerance;
-	options.filter    = /([^\/]+)\.(jpe?g|png)$/i;
+	options.filter    = /([^\/]+)\.(jpe?g|png|bmp)$/i;
 	options.dirname   = directory;
 	
 	// the keys are the filenames and the values are the filepaths

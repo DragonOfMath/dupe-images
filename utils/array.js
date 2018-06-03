@@ -29,5 +29,14 @@ Array.prototype.mapAsync = function (callback, start = 0, end = this.length) {
 Array.prototype.diff = function (arr) {
 	return this.filter(e => !arr.includes(e));
 };
+Array.prototype.flatten = function () {
+	return [].concat(...this.map(x => x instanceof Array ? x.flatten() : [x]));
+};
+Array.prototype.unique = function () {
+	return this.reduce((a,x) => {
+		if (!a.includes(x)) a.push(x);
+		return a;
+	}, []);
+};
 
 module.exports = Array;
