@@ -1,7 +1,8 @@
-const File           = require('./utils/file');
-const FileExplorer   = require('./utils/file-explorer');
+const Array          = require('./utils/Array');
 const Format         = require('./utils/formatting');
-const Array          = require('./utils/array');
+const File           = require('./utils/File');
+const FileCache      = require('./utils/FileCache');
+const FileExplorer   = require('./utils/FileExplorer');
 const Logger         = require('./utils/Logger');
 const findDuplicates = require('./dupe-image-checker');
 
@@ -28,6 +29,7 @@ module.exports = function removeDuplicates(directory, options = {}) {
 		}
 		
 		var startTime = Date.now();
+		var imgHashCache = new FileCache(directory, 'imgcache');
 		
 		logger.ln();
 		logger.log('Determining duplicates to remove...');
@@ -76,15 +78,20 @@ module.exports = function removeDuplicates(directory, options = {}) {
 				logger.green('Removed:    ', file.name);
 				removed.push(file);
 				file.delete();
+				return imgHashCache.delete(file.name);
 			})
 			.then(() => {
 				logger.green('Retained:   ', bestSizeFile.name);
 				retained.push(bestSizeFile);
 				if (bestSizeFile.name != bestName && options.rename) {
-					bestName = bestSizeFile.rename(bestName);
 					logger.yellow('Renamed As: ', bestName);
 					renamed++;
+					var prevName = bestSizeFile.name;
+					bestName = bestSizeFile.rename(bestName);
+					return imgHashCache.replace(prevName, bestSizeFile.name);
 				}
+			})
+			.then(() => {
 				logger.unindent();
 			});
 		})

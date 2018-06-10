@@ -1,15 +1,14 @@
-const Jimp    = require('jimp');
-const readAll = require('./utils/read-all');
-const Array   = require('./utils/Array');
-const Format  = require('./utils/formatting');
-const File    = require('./utils/File');
-const Logger  = require('./utils/Logger');
+const Jimp      = require('jimp');
+const readAll   = require('./utils/read-all');
+const hex       = require('./utils/hex');
+const Array     = require('./utils/Array');
+const Format    = require('./utils/formatting');
+const File      = require('./utils/File');
+const FileCache = require('./utils/FileCache');
+const Logger    = require('./utils/Logger');
 
 var logger = new Logger('Dupe Checker');
 
-function bin2hex(x) {
-	return x.match(/[01]{4}/g).map(bin => parseInt(bin,2).toString(16)).join('');
-}
 // hamming distance function (stolen from pHash)
 function distance(h1, h2) {
 	var sum = 0;
@@ -19,6 +18,9 @@ function distance(h1, h2) {
 		}
 	}
 	return sum / h1.length;
+}
+function flcmp(f1, f2) {
+	return Math.abs(f1 - f2) < 0.0001;
 }
 
 module.exports = function findDuplicates(directory, options = {}) {
@@ -33,38 +35,11 @@ module.exports = function findDuplicates(directory, options = {}) {
 	var images = Object.keys(filesObj).map(name => new File(filesObj[name]));
 	var length = images.length;
 	var duplicates = [];
-	
-	function markAsDuplicates(...files) {
-		for (var dupes of duplicates) {
-			for (var file of files) {
-				if (dupes.includes(file)) {
-					for (var newFile of files.diff(dupes)) {
-						dupes.push(newFile);
-					}
-					return;
-				}
-			}
-		}
-		duplicates.push(files);
-	}
-	function isDuplicate(file) {
-		for (var dupes of duplicates) {
-			if (dupes.includes(file)) {
-				return true;
-			}
-		}
-		return false;
-	}
-	function flcmp(f1, f2) {
-		return Math.abs(f1 - f2) < 0.0001;
-	}
-	function sameRatio(i1, i2) {
-		return flcmp(i1.width/i2.width, i1.height/i2.height);
-	}
-	
 	var startTime = Date.now();
 	
 	logger.log(`Caching data for ${length} images...`);
+	var imgHashCache = new FileCache(directory, 'imgcache');
+	
 	logger.indent();
 	
 	/* Step 1. Cache all the image widths x heights, sizes, and perceptual hashes.
@@ -72,24 +47,53 @@ module.exports = function findDuplicates(directory, options = {}) {
 	return images.forEachAsync((file, i) => {
 		logger.log(`[${i+1}/${length}]`, file.name);
 		logger.indent();
-		return Jimp.read(file.path).then(image => {
-			var size   = file.size();
-			var hash2  = image.hash(2);
-			var hash16 = bin2hex(hash2);
-			
-			file.width  = image.bitmap.width;
-			file.height = image.bitmap.height;
-			file._size  = size;
-			file._hash  = hash2;
-			
-			logger.cyan('Size: ', file.width, 'x', file.height);
-			logger.cyan('Bytes:', Format.bytes(size));
-			logger.cyan('Hash: ', hash16);
-			
-			delete image;
-		})
-		.catch(e => logger.error(e))
-		.then(() => logger.unindent())
+		if (imgHashCache.has(file.name)) {
+			try {
+				// use the cached data to skip loading the image
+				Object.assign(file, imgHashCache.get(file.name));
+				
+				// decompress the hash
+				var hash16 = file._hash;
+				file._hash = hex.hex2bin(file._hash);
+				
+				logger.cyan('Size: ', file.width, 'x', file.height);
+				logger.cyan('Bytes:', Format.bytes(file._size));
+				logger.cyan('Hash: ', hash16);
+			} catch (e) {
+				logger.error(e);
+			} finally {
+				logger.unindent();
+				return;
+			}
+		} else {
+			return Jimp.read(file.path).then(image => {
+				var size   = file.size();
+				var hash2  = image.hash(2);
+				var hash16 = hex.bin2hex(hash2);
+				
+				file.width  = image.bitmap.width;
+				file.height = image.bitmap.height;
+				file._size  = size;
+				file._hash  = hash2;
+				
+				// no longer need this
+				delete image;
+				
+				logger.cyan('Size: ', file.width, 'x', file.height);
+				logger.cyan('Bytes:', Format.bytes(file._size));
+				logger.cyan('Hash: ', hash16);
+				
+				// cache the file metadata, but with the hash compressed
+				return imgHashCache.set(file.name, {
+					width:  file.width,
+					height: file.height,
+					_size:  size,
+					_hash:  hash16
+				});
+			})
+			.catch(e => logger.error(e))
+			.then(() => logger.unindent())
+		}
 	})
 	/* Step 2. Sort images. This is completely useless to do. */
 	.then(() => {
@@ -121,7 +125,7 @@ module.exports = function findDuplicates(directory, options = {}) {
 				if (!sameRatio(file1, file2)) return;
 				
 				var dist = distance(file1._hash, file2._hash);
-				if (dist > 3/64) return;
+				if (dist > 2/64) return;
 				
 				logger.log(`[${j+1}/${length}]`, file2.name, `(${Format.bytes(file2._size)})`);
 				logger.indent();
@@ -162,6 +166,8 @@ module.exports = function findDuplicates(directory, options = {}) {
 		var endTime = Date.now();
 		var timeElapsed = endTime - startTime;
 		
+		delete imgHashCache;
+		
 		logger.unindent();
 		logger.ln();
 		logger.log(`Finished in ${Format.time(timeElapsed)}.`);
@@ -191,4 +197,29 @@ module.exports = function findDuplicates(directory, options = {}) {
 		return duplicates;
 	});
 	*/
+	
+	function markAsDuplicates(...files) {
+		for (var dupes of duplicates) {
+			for (var file of files) {
+				if (dupes.includes(file)) {
+					for (var newFile of files.diff(dupes)) {
+						dupes.push(newFile);
+					}
+					return;
+				}
+			}
+		}
+		duplicates.push(files);
+	}
+	function isDuplicate(file) {
+		for (var dupes of duplicates) {
+			if (dupes.includes(file)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	function sameRatio(i1, i2) {
+		return flcmp(i1.width/i2.width, i1.height/i2.height);
+	}
 };
